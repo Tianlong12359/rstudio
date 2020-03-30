@@ -38,6 +38,7 @@ import org.rstudio.studio.client.server.ServerError;
 import org.rstudio.studio.client.server.ServerRequestCallback;
 import org.rstudio.studio.client.workbench.commands.Commands;
 import org.rstudio.studio.client.workbench.model.Session;
+import org.rstudio.studio.client.workbench.views.console.events.ConsoleActivateEvent;
 import org.rstudio.studio.client.workbench.views.jobs.events.JobUpdatedEvent;
 import org.rstudio.studio.client.workbench.views.jobs.model.JobConstants;
 import org.rstudio.studio.client.workbench.views.jobs.model.JobUpdate;
@@ -966,6 +967,21 @@ public class DependencyManager implements InstallShinyEvent.Handler,
                                     final boolean silentEmbeddedUpdate,
                                     final CommandWithArg<Boolean> onComplete)
    {
+    
+      // Command to run when dependency installation is complete
+      CommandWithArg<Boolean> onCompletion = satisfied ->
+      {
+         // Confirmed: dependencies are in place. Switch
+         // away from the Jobs tab to put the user back in
+         // context.
+         if (satisfied)
+         {
+            events_.fireEvent(new ConsoleActivateEvent(false));
+         }
+         
+         onComplete.execute(satisfied);
+      };
+
       server_.installDependencies(
          context,
          dependencies, 
@@ -984,11 +1000,15 @@ public class DependencyManager implements InstallShinyEvent.Handler,
                   
                   if (update.job.state == JobConstants.STATE_SUCCEEDED)
                   {
+
                      // If the job succeeded, check to be sure our dependencies
                      // are now satisfied
                      ifDependenciesSatisifed(dependencies, 
                            silentEmbeddedUpdate, 
-                           onComplete);
+                           onCompletion);
+
+                     // Remove handler so we don't get notified on another job
+                     // completion.
                      reg.getValue().removeHandler();
                   }
                   else if (update.job.state == JobConstants.STATE_FAILED ||
